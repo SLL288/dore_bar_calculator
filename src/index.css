@@ -21,6 +21,62 @@
   }
 }
 
+.wechat-preview-mode {
+  background: #e7e2d7;
+}
+
+.wechat-preview-mode .no-print {
+  display: none !important;
+}
+
+.wechat-preview-mode .wechat-preview-toolbar {
+  display: block !important;
+}
+
+.wechat-preview-mode .print-report {
+  display: block !important;
+  max-width: 860px !important;
+  padding: 14px !important;
+}
+
+.wechat-preview-mode .pdf-report {
+  margin: 0 auto;
+  max-width: 794px;
+  gap: 10px;
+  background: #ffffff;
+  padding: 12px;
+  box-shadow: 0 18px 60px rgb(23 33 28 / 18%);
+}
+
+.wechat-preview-mode .report-section {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.wechat-preview-mode .summary-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.wechat-preview-mode .summary-tile {
+  padding: 10px;
+}
+
+.wechat-preview-mode .summary-tile p:first-child {
+  letter-spacing: 0;
+}
+
+.wechat-preview-mode .summary-tile p:last-child {
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.wechat-preview-mode .formula-card {
+  padding: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 @media print {
   @page {
     margin: 0.35in;

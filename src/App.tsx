@@ -201,6 +201,7 @@ function App() {
   const [recentRecords, setRecentRecords] = useState<RecentRecord[]>([])
   const [copyStatus, setCopyStatus] = useState('')
   const [apiStatus, setApiStatus] = useState(labels.apiStatus)
+  const [wechatPreviewOpen, setWechatPreviewOpen] = useState(false)
 
   useEffect(() => {
     const stored = localStorage.getItem('dore-gold-recent-calculations')
@@ -347,6 +348,20 @@ function App() {
     window.setTimeout(() => setCopyStatus(''), 2400)
   }
 
+  const handlePrint = () => {
+    const isWechatBrowser = /MicroMessenger/i.test(navigator.userAgent)
+
+    if (isWechatBrowser) {
+      setWechatPreviewOpen(true)
+      window.setTimeout(() => {
+        document.querySelector('.pdf-report')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 50)
+      return
+    }
+
+    window.print()
+  }
+
   const summaryRows = result
     ? [
         [labels.weightSummary, `${formatNumber(numericInputs.goldWeightGrams ?? 0)} g`],
@@ -363,7 +378,21 @@ function App() {
     : []
 
   return (
-    <main className="min-h-screen bg-[#f4f2ed] text-stone-900">
+    <main className={`min-h-screen bg-[#f4f2ed] text-stone-900 ${wechatPreviewOpen ? 'wechat-preview-mode' : ''}`}>
+      {wechatPreviewOpen && (
+        <div className="wechat-preview-toolbar sticky top-0 z-50 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm">
+          <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
+            <span>下方为 A4 报告预览。可使用微信右上角菜单分享、保存或在浏览器打开。</span>
+            <button
+              type="button"
+              onClick={() => setWechatPreviewOpen(false)}
+              className="rounded-md bg-stone-900 px-3 py-1.5 text-xs font-semibold text-white"
+            >
+              关闭
+            </button>
+          </div>
+        </div>
+      )}
       <section className="no-print border-b border-stone-300 bg-[#17211c] text-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div>
@@ -390,7 +419,7 @@ function App() {
             </button>
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={handlePrint}
               disabled={!result}
               className="inline-flex items-center gap-2 rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-stone-950 hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
