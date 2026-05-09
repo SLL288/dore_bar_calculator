@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Calculator, ClipboardCopy, Languages, Printer, RefreshCw } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import html2canvas from 'html2canvas'
+import jsPDF from 'jspdf'
+import { Calculator, ClipboardCopy, Languages, Printer, RefreshCw, Share2 } from 'lucide-react'
 import {
   calculateGoldBarValue,
   densityKaratTable,
@@ -36,6 +38,7 @@ const t = {
     subtitle: '用于砂金、多利金条和杂金交易的现场密度估价工作表，可作为买卖双方或内部记录参考。',
     copy: '复制',
     print: '打印 / PDF',
+    share: '微信分享',
     language: 'English',
     fieldInputs: '现场输入',
     fieldHelp: '输入空气中重量和水密度测试的重量差。',
@@ -57,6 +60,11 @@ const t = {
     notes: '备注',
     save: '保存本次计算',
     copied: '计算摘要已复制。',
+    shareCopied: '分享链接已复制，可粘贴到微信发送。',
+    shareFailed: '分享不可用，请复制浏览器地址发送。',
+    pdfGenerating: '正在生成 PDF...',
+    pdfDone: 'PDF 已生成。',
+    pdfFailed: 'PDF 生成失败，请使用浏览器打印功能。',
     formalReport: '正式计算报告',
     transactionSummary: '交易摘要',
     buyerShort: '买方',
@@ -73,7 +81,7 @@ const t = {
     net: '最终每克单价',
     total: '最终总价',
     invalid: '请输入有效的测量值和价格以生成报告。',
-    disclaimerShort: '密度法估算K金仅作参考。最终商业结算应以 XRF、火试金或精炼厂检测结果为准。',
+    disclaimerShort: '密度法估算K金仅作参考。',
     preparedBy: '制表人',
     signature: '签名',
     proof: '详细计算证明',
@@ -101,6 +109,7 @@ const t = {
       'Field density pricing worksheet for alluvial and doré gold transactions, buyer references, seller records, and internal settlement review.',
     copy: 'Copy',
     print: 'Print / PDF',
+    share: 'Share',
     language: '中文',
     fieldInputs: 'Field Inputs',
     fieldHelp: 'Enter measured values from the scale and water-density test.',
@@ -122,6 +131,11 @@ const t = {
     notes: 'Notes',
     save: 'Save Calculation',
     copied: 'Calculation summary copied.',
+    shareCopied: 'Share link copied. Paste it into WeChat to send.',
+    shareFailed: 'Sharing is not available. Copy the browser URL to send.',
+    pdfGenerating: 'Generating PDF...',
+    pdfDone: 'PDF generated.',
+    pdfFailed: 'PDF generation failed. Please use browser print.',
     formalReport: 'Formal Calculation Report',
     transactionSummary: 'Transaction Summary',
     buyerShort: 'Buyer',
@@ -200,7 +214,9 @@ function App() {
   const [form, setForm] = useState<FormState>(initialForm)
   const [recentRecords, setRecentRecords] = useState<RecentRecord[]>([])
   const [copyStatus, setCopyStatus] = useState('')
+  const [pdfStatus, setPdfStatus] = useState('')
   const [apiStatus, setApiStatus] = useState(labels.apiStatus)
+  const printableReportRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const stored = localStorage.getItem('dore-gold-recent-calculations')
@@ -313,6 +329,63 @@ function App() {
     window.setTimeout(() => setCopyStatus(''), 2400)
   }
 
+  const handleShare = async () => {
+    const shareData = {
+      title: labels.title,
+      text: labels.subtitle,
+      url: window.location.href,
+    }
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData)
+        return
+      }
+
+      await navigator.clipboard.writeText(window.location.href)
+      setCopyStatus(labels.shareCopied)
+    } catch (error) {
+      console.error(error)
+      setCopyStatus(labels.shareFailed)
+    }
+
+    window.setTimeout(() => setCopyStatus(''), 3000)
+  }
+
+  const handlePdfExport = async () => {
+    if (!result || !printableReportRef.current) return
+
+    setPdfStatus(labels.pdfGenerating)
+    try {
+      const canvas = await html2canvas(printableReportRef.current, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        useCORS: true,
+      })
+      const imageData = canvas.toDataURL('image/jpeg', 0.96)
+      const pdf = new jsPDF('p', 'mm', 'a4')
+      const pageWidth = pdf.internal.pageSize.getWidth()
+      const pageHeight = pdf.internal.pageSize.getHeight()
+      const margin = 8
+      const availableWidth = pageWidth - margin * 2
+      const availableHeight = pageHeight - margin * 2
+      const fitRatio = Math.min(availableWidth / canvas.width, availableHeight / canvas.height)
+      const imageWidth = canvas.width * fitRatio
+      const imageHeight = canvas.height * fitRatio
+      const x = (pageWidth - imageWidth) / 2
+
+      pdf.addImage(imageData, 'JPEG', x, margin, imageWidth, imageHeight)
+      pdf.save(`dore-gold-calculation-${form.date || today}.pdf`)
+      setPdfStatus(labels.pdfDone)
+    } catch (error) {
+      console.error(error)
+      setPdfStatus(labels.pdfFailed)
+      window.print()
+    }
+
+    window.setTimeout(() => setPdfStatus(''), 3000)
+  }
+
   const summaryRows = result
     ? [
         [labels.weightSummary, `${formatNumber(numericInputs.goldWeightGrams ?? 0)} g`],
@@ -347,6 +420,14 @@ function App() {
             </button>
             <button
               type="button"
+              onClick={handleShare}
+              className="inline-flex items-center gap-2 rounded-md border border-stone-500 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Share2 className="h-4 w-4" />
+              {labels.share}
+            </button>
+            <button
+              type="button"
               onClick={copySummary}
               disabled={!result}
               className="inline-flex items-center gap-2 rounded-md border border-stone-500 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
@@ -356,8 +437,9 @@ function App() {
             </button>
             <button
               type="button"
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-2 rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-stone-950 hover:bg-amber-300"
+              onClick={handlePdfExport}
+              disabled={!result}
+              className="inline-flex items-center gap-2 rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-stone-950 hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Printer className="h-4 w-4" />
               {labels.print}
@@ -447,10 +529,12 @@ function App() {
             {labels.save}
           </button>
           {copyStatus && <p className="mt-3 text-sm font-medium text-emerald-700">{copyStatus}</p>}
+          {pdfStatus && <p className="mt-3 text-sm font-medium text-emerald-700">{pdfStatus}</p>}
         </aside>
 
         <section className="grid gap-6">
-          <article className="report-section rounded-lg border border-stone-300 bg-white p-5 shadow-sm print-break-inside">
+          <div ref={printableReportRef} className="pdf-report grid gap-6 bg-white">
+            <article className="report-section rounded-lg border border-stone-300 bg-white p-5 shadow-sm print-break-inside">
             <div className="flex flex-col gap-4 border-b border-stone-200 pb-5 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.16em] text-stone-500">
@@ -490,21 +574,22 @@ function App() {
               <div className="border-t border-stone-500 pt-2">{labels.date}</div>
               <div className="border-t border-stone-500 pt-2">{labels.signature}</div>
             </div>
-          </article>
-
-          {result && (
-            <article className="report-section rounded-lg border border-stone-300 bg-white p-5 shadow-sm print-break-inside">
-              <h2 className="text-xl font-semibold">{labels.proof}</h2>
-              <div className="proof-grid mt-4 grid gap-3 text-sm leading-6 text-stone-700">
-                <Formula title="1. Density formula" text={`Calculated density = weight / weight difference = ${formatNumber(numericInputs.goldWeightGrams ?? 0)} / ${formatNumber(numericInputs.weightDifference ?? 0)} = ${formatNumber(result.density)} g/cm3`} />
-                <Formula title="2. Karat lookup method" text={`Estimated karat is selected from the density-to-karat reference table. ${result.karatMethod} Estimated karat = ${formatNumber(result.estimatedKarat)}K.`} />
-                <Formula title="3. Spot price per gram formula" text={`24K price per gram = gold spot price per oz / 31.1035 = ${currencyFormatter.format(numericInputs.goldSpotPricePerOz ?? 0)} / 31.1035 = ${currencyFormatter.format(result.spotPricePerGram24k)}`} />
-                <Formula title="4. Purity adjustment formula" text={`Gross price per gram = 24K price per gram x estimated karat / 24 = ${currencyFormatter.format(result.spotPricePerGram24k)} x ${formatNumber(result.estimatedKarat)} / 24 = ${currencyFormatter.format(result.grossPricePerGram)}`} />
-                <Formula title="5. Fee deduction formula" text={`Net unit price = gross price per gram - handling fee per gram = ${currencyFormatter.format(result.grossPricePerGram)} - ${currencyFormatter.format(numericInputs.handlingFeePerGram)} = ${currencyFormatter.format(result.netUnitPricePerGram)}`} />
-                <Formula title="6. Final total formula" text={`Final total = net unit price x total weight = ${currencyFormatter.format(result.netUnitPricePerGram)} x ${formatNumber(numericInputs.goldWeightGrams ?? 0)} g = ${currencyFormatter.format(result.finalTotalPrice)}`} />
-              </div>
             </article>
-          )}
+
+            {result && (
+              <article className="report-section rounded-lg border border-stone-300 bg-white p-5 shadow-sm print-break-inside">
+                <h2 className="text-xl font-semibold">{labels.proof}</h2>
+                <div className="proof-grid mt-4 grid gap-3 text-sm leading-6 text-stone-700">
+                  <Formula title="1. Density formula" text={`Calculated density = weight / weight difference = ${formatNumber(numericInputs.goldWeightGrams ?? 0)} / ${formatNumber(numericInputs.weightDifference ?? 0)} = ${formatNumber(result.density)} g/cm3`} />
+                  <Formula title="2. Karat lookup method" text={`Estimated karat is selected from the density-to-karat reference table. ${result.karatMethod} Estimated karat = ${formatNumber(result.estimatedKarat)}K.`} />
+                  <Formula title="3. Spot price per gram formula" text={`24K price per gram = gold spot price per oz / 31.1035 = ${currencyFormatter.format(numericInputs.goldSpotPricePerOz ?? 0)} / 31.1035 = ${currencyFormatter.format(result.spotPricePerGram24k)}`} />
+                  <Formula title="4. Purity adjustment formula" text={`Gross price per gram = 24K price per gram x estimated karat / 24 = ${currencyFormatter.format(result.spotPricePerGram24k)} x ${formatNumber(result.estimatedKarat)} / 24 = ${currencyFormatter.format(result.grossPricePerGram)}`} />
+                  <Formula title="5. Fee deduction formula" text={`Net unit price = gross price per gram - handling fee per gram = ${currencyFormatter.format(result.grossPricePerGram)} - ${currencyFormatter.format(numericInputs.handlingFeePerGram)} = ${currencyFormatter.format(result.netUnitPricePerGram)}`} />
+                  <Formula title="6. Final total formula" text={`Final total = net unit price x total weight = ${currencyFormatter.format(result.netUnitPricePerGram)} x ${formatNumber(numericInputs.goldWeightGrams ?? 0)} g = ${currencyFormatter.format(result.finalTotalPrice)}`} />
+                </div>
+              </article>
+            )}
+          </div>
 
           <article className="no-print rounded-lg border border-stone-300 bg-white p-5 shadow-sm">
             <div className="mb-4">
