@@ -176,7 +176,7 @@ const initialForm: FormState = {
   goldWeightGrams: '1000',
   weightDifference: '53',
   goldSpotPricePerOz: '3300',
-  handlingFeePerGram: '6',
+  handlingFeePerGram: '10',
   buyerName: '',
   sellerName: '',
   location: '',
